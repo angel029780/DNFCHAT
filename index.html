@@ -1,98 +1,81 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
-  <title>DNFCHAT</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: #0b1220;
-      color: white;
-      font-family: Arial, sans-serif;
-    }
-    header {
-      background: #17243b;
-      padding: 20px;
-      text-align: center;
-      font-size: 24px;
-      font-weight: bold;
-    }
-    #chat {
-      height: calc(100dvh - 150px);
-      overflow-y: auto;
-      padding: 15px;
-    }
-    .message {
-      background: #263750;
-      padding: 12px;
-      margin: 10px 0;
-      border-radius: 12px;
-      overflow-wrap: anywhere;
-    }
-    .mine {
-      background: #146c56;
-      margin-left: 15%;
-    }
-    footer {
-      display: flex;
-      padding: 12px;
-      gap: 8px;
-      background: #17243b;
-    }
-    input {
-      flex: 1;
-      min-width: 0;
-      padding: 12px;
-      border: 0;
-      border-radius: 10px;
-      font-size: 16px;
-    }
-    button {
-      background: #16a085;
-      color: white;
-      border: 0;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 16px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNFCHAT</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1220;color:white;font-family:Arial,sans-serif}header{background:#17243b;padding:18px;text-align:center;font-size:23px;font-weight:bold}.panel{max-width:700px;margin:auto;padding:16px}input,button{font:inherit;padding:12px;border:0;border-radius:10px}input{background:#fff;color:#111;min-width:0}button{background:#16a085;color:white;cursor:pointer}button:disabled{opacity:.5}#auth{display:grid;gap:10px;max-width:420px;margin:30px auto}#auth input{width:100%}#chatScreen{display:none}#chat{height:calc(100dvh - 185px);overflow-y:auto;padding:15px}.message{background:#263750;padding:12px;margin:10px 0;border-radius:12px;overflow-wrap:anywhere;max-width:85%}.mine{background:#146c56;margin-left:auto}.who{font-size:12px;opacity:.8;margin-bottom:5px}footer{display:flex;padding:12px;gap:8px;background:#17243b}footer input{flex:1}#status{color:#cbd5e1;font-size:13px;min-height:18px}#logout{float:right;font-size:12px;padding:8px}#chatTitle{text-align:center;padding:10px}
+</style>
 </head>
 <body>
-  <header>💬 DNFCHAT</header>
+<header>💬 DNFCHAT</header>
+<section id="auth" class="panel">
+<h2>Bienvenido a DNFCHAT</h2>
+<input id="email" type="email" placeholder="Correo electrónico" autocomplete="email">
+<input id="password" type="password" placeholder="Contraseña (mínimo 6 caracteres)" autocomplete="current-password">
+<button id="login">Iniciar sesión</button>
+<button id="register" type="button">Crear cuenta</button>
+<p id="authStatus" role="status"></p>
+</section>
+<section id="chatScreen">
+<div class="panel"><button id="logout">Salir</button><div id="chatTitle">Chat Familia</div><div id="status" role="status"></div></div>
+<main id="chat" aria-label="Mensajes"></main>
+<footer><input id="message" placeholder="Escribe un mensaje" maxlength="2000"><button id="send">Enviar</button></footer>
+</section>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-  <main id="chat">
-    <div class="message">
-      Bienvenido a DNFCHAT 👋
-    </div>
-  </main>
-
-  <footer>
-    <input id="message"
-           placeholder="Escribe un mensaje">
-    <button onclick="sendMessage()">
-      Enviar
-    </button>
-  </footer>
-
-  <script>
-    function sendMessage() {
-      const input = document.getElementById("message");
-      const text = input.value.trim();
-      if (!text) return;
-
-      const message = document.createElement("div");
-      message.className = "message mine";
-      message.textContent = text;
-
-      const chat = document.getElementById("chat");
-      chat.appendChild(message);
-      input.value = "";
-      chat.scrollTop = chat.scrollHeight;
-    }
-  </script>
+const firebaseConfig = {
+ apiKey: 'AIzaSyAkKgPjKQwgDyuaiS_rPsa0mIN2T5teTuQ',
+ authDomain: 'dnfchat-2b3db.firebaseapp.com',
+ projectId: 'dnfchat-2b3db',
+ storageBucket: 'dnfchat-2b3db.firebasestorage.app',
+ messagingSenderId: '988967269966',
+ appId: '1:988967269966:web:5da301e5fd32058f80351f'
+};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const $=id=>document.getElementById(id);
+let stopMessages=null,member=false;
+const familyId='Familia'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+function errorText(e){const map={'auth/email-already-in-use':'Ese correo ya está registrado.','auth/invalid-email':'Correo electrónico no válido.','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/weak-password':'La contraseña es demasiado corta.','auth/operation-not-allowed':'Activa Email/Password en Firebase Authentication.','permission-denied':'No tienes permiso para acceder a este chat.'};return map[e.code]||e.message||'Ocurrió un error';}
+function credentials(){return {email:$('email').value.trim(),password:$('password').value};}
+$('register').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Creando cuenta...';try{await createUserWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
+$('login').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Iniciando sesión...';try{await signInWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
+$('logout').onclick=()=>signOut(auth);
+onAuthStateChanged(auth,async user=>{
+ if(stopMessages){stopMessages();stopMessages=null}member=false;$('chat').replaceChildren();
+ $('auth').style.display=user?'none':'grid';$('chatScreen').style.display=user?'block':'none';
+ if(!user){$('authStatus').textContent='';return}
+ $('status').textContent='Comprobando acceso al grupo Familia...';
+ try{
+  const chatRef=doc(db,'Chats',familyId),snapshot=await getDoc(chatRef);
+  if(auth.currentUser?.uid!==user.uid)return;
+  if(!snapshot.exists()){ $('status').textContent='No existe el chat Familia. Revisa su ID en Firestore.';return }
+  const members=snapshot.data().members;
+  if(!Array.isArray(members)||!members.includes(user.uid)){$('status').textContent='Tu cuenta no está autorizada en el chat Familia. Pide al administrador que agregue tu UID.';return}
+  member=true;$('status').textContent='Conectado como '+user.email;
+  const messages=query(collection(db,'Chats',familyId,'Messages'),orderBy('createdAt','desc'),limit(100));
+  stopMessages=onSnapshot(messages,snap=>{
+   const box=$('chat');box.replaceChildren();
+   snap.docs.reverse().forEach(d=>{
+    const data=d.data(),item=document.createElement('div');item.className='message'+(data.senderId===user.uid?' mine':'');
+    const who=document.createElement('div');who.className='who';who.textContent=data.senderId===user.uid?'Tú':(data.senderEmail||'Familiar');
+    const body=document.createElement('div');body.textContent=data.text||'';
+    item.append(who,body);box.append(item);
+   });box.scrollTop=box.scrollHeight;
+  },e=>{$('status').textContent='Error al leer mensajes: '+errorText(e)});
+ }catch(e){$('status').textContent=errorText(e)}
+});
+async function sendMessage(){const user=auth.currentUser,text=$('message').value.trim();if(!user||!member||!text)return;
+ $('send').disabled=true;
+ try{await addDoc(collection(db,'Chats',familyId,'Messages'),{text,senderId:user.uid,senderEmail:user.email,createdAt:serverTimestamp()});$('message').value=''}
+ catch(e){$('status').textContent='Error al enviar: '+errorText(e)}finally{$('send').disabled=false}
+}
+$('send').onclick=sendMessage;
+$('message').addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage()});
+</script>
 </body>
 </html>
