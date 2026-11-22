@@ -39,7 +39,7 @@ const firebaseConfig = {
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
-const familyId='Familia'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
 function errorText(e){const map={'auth/email-already-in-use':'Ese correo ya está registrado.','auth/invalid-email':'Correo electrónico no válido.','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/weak-password':'La contraseña es demasiado corta.','auth/operation-not-allowed':'Activa Email/Password en Firebase Authentication.','permission-denied':'No tienes permiso para acceder a este chat.'};return map[e.code]||e.message||'Ocurrió un error';}
 function credentials(){return {email:$('email').value.trim(),password:$('password').value};}
 $('register').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Creando cuenta...';try{await createUserWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
