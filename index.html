@@ -175,8 +175,30 @@ onAuthStateChanged(auth,async user=>{
   const chatRef=doc(db,'Chats',familyId),snapshot=await getDoc(chatRef);
   if(auth.currentUser?.uid!==user.uid)return;
   if(!snapshot.exists()){ $('status').textContent='No existe el chat Familia. Revisa su ID en Firestore.';return }
-  const members=snapshot.data().members;
-  if(!Array.isArray(members)||!members.includes(user.uid)){$('status').textContent='Tu cuenta no está autorizada en el chat Familia. Pide al administrador que agregue tu UID.';return}
+  
+const members = snapshot.data().members;
+
+if (!Array.isArray(members) || !members.includes(user.uid)) {
+  $('status').textContent = 'Tu cuenta no está autorizada en el chat Familia.';
+  return;
+}
+
+const nombres = Object.create(null);
+
+await Promise.all(members.map(async uid => {
+  try {
+    const perfil = await getDoc(doc(db, 'Users', uid));
+
+    nombres[uid] = perfil.exists()
+      ? perfil.data().name || 'Familiar'
+      : 'Familiar';
+  } catch (error) {
+    nombres[uid] = 'Familiar';
+  }
+}));
+
+if (auth.currentUser?.uid !== user.uid) return;
+
   member=true;$('status').textContent='Conectado como '+user.email;
    
 $('adminPanel').hidden =
@@ -189,7 +211,11 @@ $('memberCount').textContent =
    const box=$('chat');box.replaceChildren();
    snap.docs.reverse().forEach(d=>{
     const data=d.data(),item=document.createElement('div');item.className='message'+(data.senderId===user.uid?' mine':'');
-    const who=document.createElement('div');who.className='who';who.textContent=data.senderId===user.uid?'Tú':(data.senderEmail||'Familiar');
+     const who = document.createElement('div');
+who.className = 'who';
+who.textContent = data.senderId === user.uid
+  ? 'Tú'
+  : (nombres[data.senderId] || 'Familiar');
     const body=document.createElement('div');body.textContent=data.text||'';
     item.append(who,body);box.append(item);
    });box.scrollTop=box.scrollHeight;
