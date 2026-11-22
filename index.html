@@ -71,7 +71,7 @@ onAuthStateChanged(auth,async user=>{
 });
 async function sendMessage(){const user=auth.currentUser,text=$('message').value.trim();if(!user||!member||!text)return;
  $('send').disabled=true;
- try{await addDoc(collection(db,'Chats',familyId,'Messages'),{text,senderId:user.uid,senderEmail:user.email,createdAt:serverTimestamp()});$('message').value=''}
+ try{await addDoc(collection(db,'Chats',familyId,'Messages'),{text,senderId:user.uid,createdAt:serverTimestamp()});$('message').value=''}
  catch(e){$('status').textContent='Error al enviar: '+errorText(e)}finally{$('send').disabled=false}
 }
 $('send').onclick=sendMessage;
