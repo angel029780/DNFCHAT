@@ -217,7 +217,26 @@ who.textContent = data.senderId === user.uid
   ? 'Tú'
   : (nombres[data.senderId] || 'Familiar');
     const body=document.createElement('div');body.textContent=data.text||'';
-    item.append(who,body);box.append(item);
+  const hora = document.createElement('div');
+
+hora.style.fontSize = '11px';
+hora.style.opacity = '0.7';
+hora.style.textAlign = 'right';
+hora.style.marginTop = '6px';
+
+hora.textContent = data.createdAt
+  ? data.createdAt.toDate().toLocaleString('es-DO', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  : 'Pendiente';
+
+item.append(who, body, hora);
+box.append(item);
    });box.scrollTop=box.scrollHeight;
   },e=>{$('status').textContent='Error al leer mensajes: '+errorText(e)});
  }catch(e){$('status').textContent=errorText(e)}
