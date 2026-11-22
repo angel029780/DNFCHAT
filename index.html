@@ -19,6 +19,13 @@
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
+  <div id="adminPanel" class="panel" hidden>
+  <h3>👨‍👩‍👧‍👦 Administrar Familia</h3>
+  <input id="newMemberUid" placeholder="UID del familiar" autocomplete="off">
+  <button id="addMember" type="button">Agregar familiar</button>
+  <p id="memberStatus" role="status"></p>
+  <p id="memberCount"></p>
+</div>
 <div class="panel"><button id="logout">Salir</button><div id="chatTitle">Chat Familia</div><div id="status" role="status"></div></div>
 <main id="chat" aria-label="Mensajes"></main>
 <footer><input id="message" placeholder="Escribe un mensaje" maxlength="2000"><button id="send">Enviar</button></footer>
@@ -26,7 +33,7 @@
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
  apiKey: 'AIzaSyAkKgPjKQwgDyuaiS_rPsa0mIN2T5teTuQ',
@@ -40,12 +47,68 @@ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
 const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+async function agregarFamiliar(uid) {
+  const user = auth.currentUser;
+  uid = uid.trim();
+
+  if (!user || !uid || uid.includes('/') ||
+      uid.length > 128) {
+    throw new Error('UID no válido');
+  }
+
+  const ref = doc(db, 'Chats', familyId);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+
+    if (!snap.exists()) {
+      throw new Error('Grupo no encontrado');
+    }
+
+    const data = snap.data();
+
+    if (data.adminUid !== user.uid ||
+        !Array.isArray(data.members) ||
+        !data.members.includes(user.uid)) {
+      throw new Error('No eres administrador');
+    }
+
+    if (data.members.includes(uid)) {
+      throw new Error('Familiar ya agregado');
+    }
+
+    tx.update(ref, {
+      members: [...data.members, uid]
+    });
+  });
+}
+
+$('addMember').onclick = async () => {
+  const uid = $('newMemberUid').value.trim();
+  const status = $('memberStatus');
+  const button = $('addMember');
+
+  button.disabled = true;
+  status.textContent = 'Agregando familiar...';
+
+  try {
+    await agregarFamiliar(uid);
+    status.textContent = 'Familiar agregado correctamente';
+    $('newMemberUid').value = '';
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 function errorText(e){const map={'auth/email-already-in-use':'Ese correo ya está registrado.','auth/invalid-email':'Correo electrónico no válido.','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/weak-password':'La contraseña es demasiado corta.','auth/operation-not-allowed':'Activa Email/Password en Firebase Authentication.','permission-denied':'No tienes permiso para acceder a este chat.'};return map[e.code]||e.message||'Ocurrió un error';}
 function credentials(){return {email:$('email').value.trim(),password:$('password').value};}
 $('register').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Creando cuenta...';try{await createUserWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
 $('login').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Iniciando sesión...';try{await signInWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
+  $('adminPanel').hidden = true;
  if(stopMessages){stopMessages();stopMessages=null}member=false;$('chat').replaceChildren();
  $('auth').style.display=user?'none':'grid';$('chatScreen').style.display=user?'block':'none';
  if(!user){$('authStatus').textContent='';return}
@@ -57,6 +120,12 @@ onAuthStateChanged(auth,async user=>{
   const members=snapshot.data().members;
   if(!Array.isArray(members)||!members.includes(user.uid)){$('status').textContent='Tu cuenta no está autorizada en el chat Familia. Pide al administrador que agregue tu UID.';return}
   member=true;$('status').textContent='Conectado como '+user.email;
+   
+$('adminPanel').hidden =
+  snapshot.data().adminUid !== user.uid;
+
+$('memberCount').textContent =
+  'Miembros autorizados: ' + members.length;
   const messages=query(collection(db,'Chats',familyId,'Messages'),orderBy('createdAt','desc'),limit(100));
   stopMessages=onSnapshot(messages,snap=>{
    const box=$('chat');box.replaceChildren();
