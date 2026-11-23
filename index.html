@@ -181,6 +181,11 @@ border-bottom:1px solid #333;">
 <input id="password" type="password" placeholder="Contraseña (mínimo 6 caracteres)" autocomplete="current-password">
 <button id="login">Iniciar sesión</button>
 <button id="register" type="button">Crear cuenta</button>
+  <button id="deleteAccountLogin"
+        type="button"
+        style="background:#b93838;color:white;">
+  🗑️ Eliminar mi cuenta
+</button>
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
@@ -292,7 +297,41 @@ border-bottom:1px solid #333;">
   <button id="saveProfile" type="button">
     Guardar perfil
   </button>
+<hr style="margin:25px 0;">
 
+<button id="deleteAccount"
+        type="button"
+        style="background:#b93838;
+               color:white;
+               width:100%;">
+  🗑️ Eliminar mi cuenta
+</button>
+<div id="deleteConfirm" hidden>
+
+  <p>Confirma tu contraseña para eliminar tu cuenta.</p>
+
+  <input id="deletePassword"
+         type="password"
+         autocomplete="current-password"
+         placeholder="Tu contraseña">
+
+  <button id="confirmDeleteAccount"
+          type="button"
+          style="background:#b93838;">
+    Eliminar permanentemente
+  </button>
+
+  <button id="cancelDeleteAccount"
+          type="button">
+    Cancelar
+  </button>
+
+</div>
+<p style="color:#ff7777;
+          font-size:13px;
+          text-align:center;">
+  Esta acción es permanente e irreversible.
+</p>
   <p id="profileStatus" role="status"></p>
 </div>
 
@@ -335,10 +374,14 @@ import {
   signOut,
   onAuthStateChanged,
   sendEmailVerification,
-  reload
+sendPasswordResetEmail,
+deleteUser,
+reauthenticateWithCredential,
+EmailAuthProvider,
+reload
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-import {setDoc, where, getDocs} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {setDoc, where, getDocs, deleteDoc} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
  apiKey: 'AIzaSyAkKgPjKQwgDyuaiS_rPsa0mIN2T5teTuQ',
@@ -358,7 +401,7 @@ familyId = sessionStorage.getItem('activeGroupId')
   || defaultGroupId;  
 $('profileToggle').onclick = async () => {
   const user = auth.currentUser;
-  if (!user || !member) return;
+  if (!user || !user.emailVerified) return;
 
   const panel = $('profilePanel');
   panel.hidden = !panel.hidden;
@@ -409,7 +452,55 @@ $('saveProfile').onclick = async () => {
     $('profileStatus').textContent = error.message;
   }
 };
+$('deleteAccount').onclick = () => {
+  $('deleteConfirm').hidden = false;
+  $('deletePassword').focus();
+};
 
+$('cancelDeleteAccount').onclick = () => {
+  $('deleteConfirm').hidden = true;
+  $('deletePassword').value = '';
+};
+
+$('confirmDeleteAccount').onclick = async () => {
+  const user = auth.currentUser;
+  const password = $('deletePassword').value;
+
+  if (!user || !password) return;
+
+  if (!confirm('¿Eliminar tu cuenta permanentemente?')) return;
+
+  const button = $('confirmDeleteAccount');
+  button.disabled = true;
+
+  try {
+    const credential =
+      EmailAuthProvider.credential(
+        user.email, password
+      );
+
+    await reauthenticateWithCredential(
+      user, credential
+    );
+await salirDeGrupos(user.uid);
+    await deleteDoc(doc(db, 'Users', user.uid));
+
+await deleteUser(user);
+
+    sessionStorage.clear();
+
+    alert('Tu cuenta ha sido eliminada.');
+
+    location.reload();
+
+  } catch (error) {
+    $('profileStatus').textContent =
+      errorText(error);
+  } finally {
+    $('deletePassword').value = '';
+    button.disabled = false;
+  }
+};
 
   $('adminToggle').onclick = () => {
   const panel = $('adminPanel');
@@ -441,13 +532,51 @@ function mostrarMiembros(members, nombres, adminUid) {
       boton.textContent = 'Eliminar miembro';
       boton.style.background = '#b93838';
       boton.onclick = () => eliminarMiembro(uid);
-      item.append(boton);
-    }
-
+    item.append(boton);
+const transferir = document.createElement('button');
+transferir.textContent = '🛡️ Transferir administración';
+transferir.style.background = '#2563eb';
+transferir.onclick = () => transferirAdmin(uid);
+item.append(transferir);
+}
     lista.append(item);
   });
 }
-  
+  async function transferirAdmin(uid) {
+  const user = auth.currentUser;
+  if (!user || uid === user.uid) return;
+
+  if (!confirm('¿Deseas transferir la administración a este familiar?')) return;
+
+  const status = $('manageStatus');
+
+  try {
+    const ref = doc(db, 'Chats', familyId);
+
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      const data = snap.data();
+
+      if (!data || data.adminUid !== user.uid) {
+        throw new Error('No eres el administrador.');
+      }
+
+      if (!data.members.includes(uid)) {
+        throw new Error('El usuario no es miembro.');
+      }
+
+      tx.update(ref, {
+        adminUid: uid
+      });
+    });
+
+    alert('Administración transferida correctamente.');
+    location.reload();
+
+  } catch (error) {
+    status.textContent = errorText(error);
+  }
+}
 async function eliminarMiembro(uid) {
   const user = auth.currentUser;
   if (!user) return;
@@ -692,6 +821,40 @@ $('addMember').onclick = async () => {
 
 function errorText(e){const map={'auth/email-already-in-use':'Ese correo ya está registrado.','auth/invalid-email':'Correo electrónico no válido.','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/weak-password':'La contraseña es demasiado corta.','auth/operation-not-allowed':'Activa Email/Password en Firebase Authentication.','permission-denied':'No tienes permiso para acceder a este chat.'};return map[e.code]||e.message||'Ocurrió un error';}
 function credentials(){return {email:$('email').value.trim(),password:$('password').value};}
+  async function salirDeGrupos(uid) {
+  const grupos = await getDocs(
+    query(
+      collection(db, 'Chats'),
+      where('members', 'array-contains', uid)
+    )
+  );
+
+  for (const grupo of grupos.docs) {
+    if (grupo.data().adminUid === uid) {
+      throw new Error(
+        'Debes transferir la administración antes de eliminar tu cuenta.'
+      );
+    }
+  }
+
+  for (const grupo of grupos.docs) {
+    await runTransaction(db, async transaction => {
+      const actual = await transaction.get(grupo.ref);
+
+      if (!actual.exists()) return;
+
+      const datos = actual.data();
+
+      if (datos.adminUid === uid) {
+        throw new Error('Debes transferir la administración.');
+      }
+
+      transaction.update(grupo.ref, {
+        members: datos.members.filter(id => id !== uid)
+      });
+    });
+  }
+}
 $('register').onclick = async () => {
   const {email, password} = credentials();
 
@@ -713,6 +876,54 @@ $('register').onclick = async () => {
 
   } catch (e) {
     $('authStatus').textContent = errorText(e);
+  }
+};
+  let eliminandoCuenta = false;
+  $('deleteAccountLogin').onclick = async () => {
+  const {email, password} = credentials();
+
+  if (!email || !password) {
+    $('authStatus').textContent =
+      'Escribe tu correo y contraseña.';
+    return;
+  }
+
+  if (!confirm(
+    '¿Deseas eliminar tu cuenta permanentemente?'
+  )) return;
+
+  const button = $('deleteAccountLogin');
+  button.disabled = true;
+eliminandoCuenta = true;
+  try {
+    const result =
+      await signInWithEmailAndPassword(
+        auth, email, password
+      );
+
+    if (result.user.emailVerified) {
+      await salirDeGrupos(result.user.uid);
+      await deleteDoc(
+        doc(db, 'Users', result.user.uid)
+      );
+    }
+
+    await deleteUser(result.user);
+
+    sessionStorage.clear();
+
+    alert('Tu cuenta ha sido eliminada.');
+
+    location.reload();
+
+  } catch (error) {
+    await signOut(auth);
+    $('authStatus').textContent =
+      errorText(error);
+  } finally {
+   eliminandoCuenta = false;
+    $('password').value = '';
+    button.disabled = false;
   }
 };
 $('login').onclick = async () => {
@@ -746,6 +957,7 @@ $('login').onclick = async () => {
 };
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
+  if (eliminandoCuenta) return;
   if (user && !user.emailVerified) {
   $('auth').style.display = 'grid';
   $('chatScreen').style.display = 'none';
@@ -756,7 +968,7 @@ onAuthStateChanged(auth,async user=>{
   stopRequests();
   stopRequests = null;
 }
-  $('profileToggle').hidden = true;
+  $('profileToggle').hidden = !user;
 $('profilePanel').hidden = true;
 $('profileName').value = '';
 $('profileStatus').textContent = '';
