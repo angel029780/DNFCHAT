@@ -605,6 +605,50 @@ async function sendMessage(){const user=auth.currentUser,text=$('message').value
 }
 $('send').onclick=sendMessage;
 $('message').addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage()});
+let refreshY = null;
+
+document.addEventListener('touchstart', e => {
+  const chat = document.getElementById('chat');
+  refreshY = window.scrollY === 0 &&
+    (!chat.contains(e.target) || chat.scrollTop === 0)
+    ? e.touches[0].clientY : null;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  if (refreshY === null) return;
+
+  const distance =
+    e.changedTouches[0].clientY - refreshY;
+
+  refreshY = null;
+
+  if (distance > 100) {
+    const indicator = document.createElement('div');
+
+    indicator.textContent = '↻ Actualizando...';
+
+    indicator.style.cssText = `
+      position:fixed;
+      top:65px;
+      left:50%;
+      transform:translateX(-50%);
+      background:#159e88;
+      color:white;
+      font-size:11px;
+      padding:5px 10px;
+      border-radius:20px;
+      z-index:9999;
+    `;
+
+    document.body.appendChild(indicator);
+
+    setTimeout(() => location.reload(), 500);
+  }
+}, { passive: true });
+
+document.addEventListener('touchcancel', () => {
+  refreshY = null;
+}); 
 </script>
 </body>
 </html>
