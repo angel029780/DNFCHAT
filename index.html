@@ -312,18 +312,14 @@ $('requestAccess').onclick = async () => {
     const snap = await getDoc(ref);
 
     if (snap.exists()) {
-      const estado = snap.data().status;
+  const estado = snap.data().status;
 
-      status.textContent =
-        estado === 'pending'
-        ? 'Tu solicitud está pendiente.'
-        : estado === 'accepted'
-        ? 'Solicitud aceptada. Recarga la app.'
-        : 'Tu solicitud fue rechazada.';
-
-      return;
-    }
-
+  if (estado === 'pending') {
+    status.textContent =
+      'Tu solicitud está pendiente.';
+    return;
+  }
+}
     await setDoc(ref, {
       email: user.email,
       status: 'pending',
