@@ -77,6 +77,33 @@ footer input {
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
+  
+<button id="profileToggle" type="button" hidden>
+  👤 Mi perfil
+</button>
+
+<div id="profilePanel" class="panel" hidden>
+  <h3>👤 Mi perfil</h3>
+
+  <input id="profileName"
+    placeholder="Escribe tu nombre"
+    maxlength="40">
+
+  <select id="profileAvatar">
+    <option>👤</option>
+    <option>😎</option>
+    <option>😊</option>
+    <option>🦁</option>
+    <option>🐶</option>
+  </select>
+
+  <button id="saveProfile" type="button">
+    Guardar perfil
+  </button>
+
+  <p id="profileStatus" role="status"></p>
+</div>
+
   <div id="requestPanel" class="panel" hidden>
   <h3>🔒 Solicitar acceso</h3>
   <p>Solicita permiso para entrar al chat Familia.</p>
@@ -126,6 +153,62 @@ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
 const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+  
+$('profileToggle').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user || !member) return;
+
+  const panel = $('profilePanel');
+  panel.hidden = !panel.hidden;
+
+  if (panel.hidden) return;
+
+  try {
+    const snap = await getDoc(
+      doc(db, 'Users', user.uid)
+    );
+
+    if (auth.currentUser?.uid !== user.uid) return;
+
+    $('profileName').value =
+      snap.data()?.name || '';
+
+    $('profileAvatar').value =
+      snap.data()?.avatar || '👤';
+
+  } catch (error) {
+    $('profileStatus').textContent = error.message;
+  }
+};
+
+$('saveProfile').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user || !member) return;
+
+  const name = $('profileName').value.trim();
+  const avatar = $('profileAvatar').value;
+
+  if (!name || name.length > 40) {
+    $('profileStatus').textContent =
+      'Escribe un nombre válido.';
+    return;
+  }
+
+  try {
+    await setDoc(doc(db, 'Users', user.uid), {
+      name,
+      avatar
+    }, { merge: true });
+
+    alert('Perfil guardado correctamente');
+    location.reload();
+
+  } catch (error) {
+    $('profileStatus').textContent = error.message;
+  }
+};
+
+
   $('adminToggle').onclick = () => {
   const panel = $('adminPanel');
   panel.hidden = !panel.hidden;
@@ -419,6 +502,10 @@ onAuthStateChanged(auth,async user=>{
   stopRequests();
   stopRequests = null;
 }
+  $('profileToggle').hidden = true;
+$('profilePanel').hidden = true;
+$('profileName').value = '';
+$('profileStatus').textContent = '';
   $('adminPanel').hidden = true;
   $('adminToggle').hidden = true;
 $('adminToggle').textContent = '⚙️ Administración';
@@ -459,6 +546,7 @@ await Promise.all(members.map(async uid => {
 
 if (auth.currentUser?.uid !== user.uid) return;
 member=true;$('status').textContent='Conectado como '+user.email;
+   $('profileToggle').hidden = false;
    $('adminPanel').hidden = true;
 $('adminToggle').hidden =
   snapshot.data().adminUid !== user.uid;
