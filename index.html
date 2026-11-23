@@ -133,7 +133,13 @@ border-bottom:1px solid #333;">
   <button id="menuChat">💬 Mis grupos</button>
 
 <button id="menuNewGroup">➕ Crear grupo</button>
+<button id="menuJoinGroup">
+  🔑 Unirse a un grupo
+</button>
 
+<button id="menuInvite" hidden>
+  📨 Invitar miembros
+</button>
   <button id="menuProfile">👤 Mi perfil</button>
 
   <button id="menuAdmin" hidden>⚙️ Administración</button>
@@ -156,7 +162,29 @@ border-bottom:1px solid #333;">
   <h3>💬 Mis grupos</h3>
   <div id="groupsList"></div>
 </div>
+<div id="joinGroupPanel" class="panel" hidden>
+  <h3>🔑 Unirse a un grupo</h3>
 
+  <input id="inviteCode"
+    placeholder="Código de invitación"
+    maxlength="40">
+
+  <button id="joinGroup" type="button">
+    Solicitar acceso
+  </button>
+
+  <p id="joinStatus" role="status"></p>
+</div>
+
+<div id="invitePanel" class="panel" hidden>
+  <h3>📨 Invitar miembros</h3>
+
+  <button id="generateInvite" type="button">
+    Generar código
+  </button>
+
+  <p id="inviteResult"></p>
+</div>
 <div id="newGroupPanel" class="panel" hidden>
   <h3>➕ Crear grupo</h3>
 
@@ -871,6 +899,107 @@ $('menuChat').onclick = async () => {
 
   } catch (error) {
     lista.textContent = error.message;
+  }
+};
+function abrirPanelInvitacion(id) {
+  [
+    'groupsPanel',
+    'newGroupPanel',
+    'profilePanel',
+    'adminPanel',
+    'joinGroupPanel',
+    'invitePanel'
+  ].forEach(p => {
+    $(p).hidden = true;
+  });
+
+  $('mainMenu').hidden = true;
+  $(id).hidden = false;
+}
+
+$('menuJoinGroup').onclick = () => {
+  if (!auth.currentUser) return;
+  abrirPanelInvitacion('joinGroupPanel');
+};
+
+$('menuInvite').onclick = () => {
+  if (!auth.currentUser || !member) return;
+  if ($('adminToggle').hidden) return;
+  abrirPanelInvitacion('invitePanel');
+};
+  $('menuToggle').addEventListener('click', () => {
+
+  $('menuJoinGroup').hidden =
+    !auth.currentUser;
+
+  $('menuInvite').hidden =
+    !auth.currentUser ||
+    !member ||
+    $('adminToggle').hidden;
+
+});
+  $('generateInvite').onclick = async () => {
+  const user = auth.currentUser;
+
+  if (!user || !member) return;
+  if ($('adminToggle').hidden) return;
+
+  const resultado = $('inviteResult');
+
+  try {
+    const code = crypto.randomUUID();
+
+    await setDoc(doc(db, 'Invites', code), {
+      chatId: familyId,
+      adminUid: user.uid,
+      createdAt: serverTimestamp()
+    });
+
+    resultado.textContent = code;
+
+  } catch (error) {
+    resultado.textContent = error.message;
+  }
+};
+  $('joinGroup').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const code = $('inviteCode').value.trim();
+  const status = $('joinStatus');
+
+  if (!/^[a-f0-9-]{36}$/i.test(code)) {
+    status.textContent = 'Código no válido.';
+    return;
+  }
+
+  try {
+    const invite = await getDoc(
+      doc(db, 'Invites', code)
+    );
+
+    if (!invite.exists()) {
+      status.textContent = 'Invitación no válida.';
+      return;
+    }
+
+    const chatId = invite.data().chatId;
+
+    await setDoc(
+      doc(db, 'Chats', chatId, 'Requests', user.uid),
+      {
+        email: user.email,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        inviteCode: code
+      }
+    );
+
+    status.textContent =
+      'Solicitud enviada. Espera la aprobación.';
+
+  } catch (error) {
+    status.textContent = error.message;
   }
 };
 </script>
