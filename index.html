@@ -77,12 +77,24 @@ footer input {
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
-  <div id="adminPanel" class="panel" hidden>
+  <div id="requestPanel" class="panel" hidden>
+  <h3>🔒 Solicitar acceso</h3>
+  <p>Solicita permiso para entrar al chat Familia.</p>
+  <button id="requestAccess" type="button">
+    Solicitar acceso
+  </button>
+  <p id="requestStatus" role="status"></p>
+</div>
+ <div id="adminPanel" class="panel" hidden>
   <h3>👨‍👩‍👧‍👦 Administrar Familia</h3>
   <input id="newMemberUid" placeholder="UID del familiar" autocomplete="off">
   <button id="addMember" type="button">Agregar familiar</button>
   <p id="memberStatus" role="status"></p>
   <p id="memberCount"></p>
+   <hr>
+<h3>📩 Solicitudes pendientes</h3>
+<div id="requestsList"></div>
+<p id="requestsStatus" role="status"></p>
 </div>
 <div class="panel"><button id="logout">Salir</button><div id="chatTitle">Chat Familia</div><div id="status" role="status"></div></div>
 <main id="chat" aria-label="Mensajes"></main>
@@ -92,6 +104,8 @@ footer input {
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+import {setDoc, where} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
  apiKey: 'AIzaSyAkKgPjKQwgDyuaiS_rPsa0mIN2T5teTuQ',
@@ -105,6 +119,147 @@ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
 const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+$('requestAccess').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user || member) return;
+
+  const button = $('requestAccess');
+  const status = $('requestStatus');
+
+  button.disabled = true;
+
+  try {
+    const ref = doc(db, 'Chats', familyId,
+      'Requests', user.uid);
+
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      const estado = snap.data().status;
+
+      status.textContent =
+        estado === 'pending'
+        ? 'Tu solicitud está pendiente.'
+        : estado === 'accepted'
+        ? 'Solicitud aceptada. Recarga la app.'
+        : 'Tu solicitud fue rechazada.';
+
+      return;
+    }
+
+    await setDoc(ref, {
+      email: user.email,
+      status: 'pending',
+      createdAt: serverTimestamp()
+    });
+
+    status.textContent =
+      'Solicitud enviada correctamente.';
+
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
+
+async function responderSolicitud(uid, aceptar) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const chatRef = doc(db, 'Chats', familyId);
+  const requestRef = doc(
+    db, 'Chats', familyId, 'Requests', uid
+  );
+
+  try {
+    await runTransaction(db, async tx => {
+      const chat = await tx.get(chatRef);
+      const solicitud = await tx.get(requestRef);
+
+      if (!chat.exists() ||
+          chat.data().adminUid !== user.uid) {
+        throw new Error('No autorizado');
+      }
+
+      if (!solicitud.exists() ||
+          solicitud.data().status !== 'pending') {
+        throw new Error('Solicitud no disponible');
+      }
+
+      if (aceptar) {
+        const members = [...new Set([
+          ...chat.data().members, uid
+        ])];
+
+        tx.update(chatRef, {members});
+      }
+
+      tx.update(requestRef, {
+        status: aceptar ? 'accepted' : 'rejected'
+      });
+    });
+
+    $('requestsStatus').textContent = aceptar
+      ? 'Solicitud aceptada correctamente.'
+      : 'Solicitud rechazada.';
+
+  } catch (error) {
+    $('requestsStatus').textContent = error.message;
+  }
+}
+
+
+let stopRequests = null;
+
+function mostrarSolicitudes() {
+  if (stopRequests) stopRequests();
+
+  const ref = collection(
+    db, 'Chats', familyId, 'Requests'
+  );
+
+  const q = query(
+    ref, where('status', '==', 'pending')
+  );
+
+  stopRequests = onSnapshot(q, snap => {
+    const lista = $('requestsList');
+    lista.replaceChildren();
+
+    if (snap.empty) {
+      lista.textContent = 'No hay solicitudes pendientes.';
+      return;
+    }
+
+    snap.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'message';
+
+      const nombre = document.createElement('p');
+      nombre.textContent = d.data().email;
+
+      const aceptar = document.createElement('button');
+      aceptar.textContent = '✓ Aceptar';
+      aceptar.onclick = () =>
+        responderSolicitud(d.id, true);
+
+      const rechazar = document.createElement('button');
+      rechazar.textContent = '✕ Rechazar';
+      rechazar.style.background = '#b93838';
+      rechazar.onclick = () =>
+        responderSolicitud(d.id, false);
+
+      item.append(nombre, aceptar, rechazar);
+      lista.append(item);
+    });
+  }, error => {
+    $('requestsStatus').textContent = error.message;
+  });
+}
+
+
 async function agregarFamiliar(uid) {
   const user = auth.currentUser;
   uid = uid.trim();
@@ -166,7 +321,15 @@ $('register').onclick=async()=>{const {email,password}=credentials();$('authStat
 $('login').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Iniciando sesión...';try{await signInWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
+  if (stopRequests) {
+  stopRequests();
+  stopRequests = null;
+}
   $('adminPanel').hidden = true;
+  $('requestPanel').hidden = true;
+$('requestStatus').textContent = '';
+$('requestsList').replaceChildren();
+$('requestsStatus').textContent = '';
  if(stopMessages){stopMessages();stopMessages=null}member=false;$('chat').replaceChildren();
  $('auth').style.display=user?'none':'grid';$('chatScreen').style.display=user?'block':'none';
  if(!user){$('authStatus').textContent='';return}
@@ -179,7 +342,8 @@ onAuthStateChanged(auth,async user=>{
 const members = snapshot.data().members;
 
 if (!Array.isArray(members) || !members.includes(user.uid)) {
-  $('status').textContent = 'Tu cuenta no está autorizada en el chat Familia.';
+  $('requestPanel').hidden = false;
+  $('status').textContent = 'Solicita acceso al chat Familia.';
   return;
 }
 
@@ -203,7 +367,9 @@ if (auth.currentUser?.uid !== user.uid) return;
    
 $('adminPanel').hidden =
   snapshot.data().adminUid !== user.uid;
-
+if (snapshot.data().adminUid === user.uid) {
+  mostrarSolicitudes();
+}
 $('memberCount').textContent =
   'Miembros autorizados: ' + members.length;
   const messages=query(collection(db,'Chats',familyId,'Messages'),orderBy('createdAt','desc'),limit(100));
@@ -239,7 +405,17 @@ item.append(who, body, hora);
 box.append(item);
    });box.scrollTop=box.scrollHeight;
   },e=>{$('status').textContent='Error al leer mensajes: '+errorText(e)});
- }catch(e){$('status').textContent=errorText(e)}
+} catch (e) {
+  if (auth.currentUser?.uid !== user.uid) return;
+
+  if (e.code === 'permission-denied') {
+    $('requestPanel').hidden = false;
+    $('status').textContent =
+      'Solicita acceso al chat Familia.';
+  } else {
+    $('status').textContent = errorText(e);
+  }
+}
 });
 async function sendMessage(){const user=auth.currentUser,text=$('message').value.trim();if(!user||!member||!text)return;
  $('send').disabled=true;
