@@ -34,7 +34,33 @@ body {
   min-height: 0;
   overflow-y: auto;
 }
+.tool-screen:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  color: white;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  margin: 0;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top));
+  overflow-y: auto;
+}
 
+.tool-screen[hidden] {
+  display: none !important;
+}
+
+.tool-back {
+  background: transparent;
+  color: #449687;
+  border: none;
+  font-size: 18px;
+  width: auto;
+  margin-bottom: 20px;
+}
 .panel {
   width: 100%;
   max-width: 700px;
@@ -1034,6 +1060,56 @@ $('menuInvite').onclick = () => {
     }
   }
 };
+  const toolPanels = [
+  'groupsPanel',
+  'newGroupPanel',
+  'joinGroupPanel',
+  'invitePanel',
+  'profilePanel',
+  'adminPanel'
+];
+
+toolPanels.forEach(id => {
+  const panel = $(id);
+
+  if (!panel) return;
+
+  panel.classList.add('tool-screen');
+
+  const back = document.createElement('button');
+
+  back.type = 'button';
+  back.className = 'tool-back';
+  back.textContent = '‹ Volver al chat';
+
+  back.onclick = () => {
+    toolPanels.forEach(p => {
+      if ($(p)) $(p).hidden = true;
+    });
+
+    $('mainMenu').hidden = true;
+  };
+
+  panel.prepend(back);
+
+  const observer = new MutationObserver(() => {
+    if (!panel.hidden) {
+      toolPanels.forEach(other => {
+        if (other !== id && $(other)) {
+          $(other).hidden = true;
+        }
+      });
+
+      $('mainMenu').hidden = true;
+      panel.scrollTop = 0;
+    }
+  });
+
+  observer.observe(panel, {
+    attributes: true,
+    attributeFilter: ['hidden']
+  });
+});
 </script>
 </body>
 </html>
