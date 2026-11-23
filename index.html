@@ -1017,7 +1017,8 @@ member=true;$('status').textContent='Conectado como '+user.email;
    $('adminPanel').hidden = true;
 $('adminToggle').hidden =
   snapshot.data().adminUid !== user.uid;
-
+$('homeAdmin').hidden =
+  snapshot.data().adminUid !== user.uid;
 if (snapshot.data().adminUid === user.uid) {
   mostrarSolicitudes();
   mostrarMiembros(members, nombres, snapshot.data().adminUid);
@@ -1474,11 +1475,24 @@ $('homePanel').hidden = true;
 
   $('mainMenu').hidden = true;
 
-  const esAdmin =
-    member && !$('adminToggle').hidden;
+  $('homeAdmin').hidden = true;
+$('homeInvite').hidden = true;
+
+const user = auth.currentUser;
+
+getDocs(query(
+  collection(db, 'Chats'),
+  where('members', 'array-contains', user.uid)
+)).then(grupos => {
+  if (auth.currentUser?.uid !== user.uid) return;
+
+  const esAdmin = grupos.docs.some(
+    grupo => grupo.data().adminUid === user.uid
+  );
 
   $('homeAdmin').hidden = !esAdmin;
   $('homeInvite').hidden = !esAdmin;
+}).catch(console.error);
 
   $('homePanel').hidden = false;
 }
