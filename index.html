@@ -85,8 +85,11 @@ footer input {
   </button>
   <p id="requestStatus" role="status"></p>
 </div>
- <div id="adminPanel" class="panel" hidden>
-  <h3>👨‍👩‍👧‍👦 Administrar Familia</h3>
+ <button id="adminToggle" type="button" hidden>
+  ⚙️ Administración
+</button>
+<div id="adminPanel" class="panel" hidden>
+<h3>👨‍👩‍👧‍👦 Administrar Familia</h3>
   <input id="newMemberUid" placeholder="UID del familiar" autocomplete="off">
   <button id="addMember" type="button">Agregar familiar</button>
   <p id="memberStatus" role="status"></p>
@@ -123,6 +126,14 @@ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
 const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+  $('adminToggle').onclick = () => {
+  const panel = $('adminPanel');
+  panel.hidden = !panel.hidden;
+
+  $('adminToggle').textContent = panel.hidden
+    ? '⚙️ Administración'
+    : '✖ Cerrar administración';
+};
 function mostrarMiembros(members, nombres, adminUid) {
   const lista = $('membersList');
   lista.replaceChildren();
@@ -409,6 +420,8 @@ onAuthStateChanged(auth,async user=>{
   stopRequests = null;
 }
   $('adminPanel').hidden = true;
+  $('adminToggle').hidden = true;
+$('adminToggle').textContent = '⚙️ Administración';
   $('requestPanel').hidden = true;
 $('requestStatus').textContent = '';
 $('requestsList').replaceChildren();
@@ -445,10 +458,9 @@ await Promise.all(members.map(async uid => {
 }));
 
 if (auth.currentUser?.uid !== user.uid) return;
-
-  member=true;$('status').textContent='Conectado como '+user.email;
-   
-$('adminPanel').hidden =
+member=true;$('status').textContent='Conectado como '+user.email;
+   $('adminPanel').hidden = true;
+$('adminToggle').hidden =
   snapshot.data().adminUid !== user.uid;
 
 if (snapshot.data().adminUid === user.uid) {
