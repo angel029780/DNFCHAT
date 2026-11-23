@@ -1044,7 +1044,7 @@ $('menuInvite').onclick = () => {
   'Únete a nuestro grupo privado.\n\n' +
   'Código de invitación: ' + code +
   '\n\nAbre DNFCHAT aquí:\n' +
-  'https://angel029780.github.io/DNFCHAT/' +
+  'https://angel029780.github.io/DNFCHAT/?invite=' + encodeURIComponent(code) +
   '\n\nCrea tu cuenta o inicia sesión.' +
   '\nSelecciona Unirse a un grupo e introduce el código.';
     try {
@@ -1112,6 +1112,39 @@ toolPanels.forEach(id => {
     attributes: true,
     attributeFilter: ['hidden']
   });
+});
+  const codigoInvitacion = new URLSearchParams(
+  window.location.search
+).get('invite');
+
+if (
+  codigoInvitacion &&
+  /^[a-f0-9-]{36}$/i.test(codigoInvitacion)
+) {
+  sessionStorage.setItem(
+    'pendingInvite',
+    codigoInvitacion
+  );
+}
+
+onAuthStateChanged(auth, user => {
+  if (!user) return;
+
+  const codigo = sessionStorage.getItem(
+    'pendingInvite'
+  );
+
+  if (!codigo) return;
+
+  $('inviteCode').value = codigo;
+
+  abrirPanelInvitacion('joinGroupPanel');
+
+  sessionStorage.removeItem('pendingInvite');
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete('invite');
+  history.replaceState(null, '', url);
 });
 </script>
 </body>
