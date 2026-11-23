@@ -130,7 +130,9 @@ style="background:#000000;
 padding:12px;
 border-bottom:1px solid #333;">
 
-  <button id="menuChat">💬 Chat Familia</button>
+  <button id="menuChat">💬 Mis grupos</button>
+
+<button id="menuNewGroup">➕ Crear grupo</button>
 
   <button id="menuProfile">👤 Mi perfil</button>
 
@@ -150,7 +152,24 @@ border-bottom:1px solid #333;">
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
-  
+  <div id="groupsPanel" class="panel" hidden>
+  <h3>💬 Mis grupos</h3>
+  <div id="groupsList"></div>
+</div>
+
+<div id="newGroupPanel" class="panel" hidden>
+  <h3>➕ Crear grupo</h3>
+
+  <input id="newGroupName"
+    placeholder="Nombre del grupo"
+    maxlength="40">
+
+  <button id="createGroup" type="button">
+    Crear grupo
+  </button>
+
+  <p id="groupStatus" role="status"></p>
+</div>
 <button id="profileToggle" type="button" hidden>
   👤 Mi perfil
 </button>
@@ -212,7 +231,7 @@ import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
-import {setDoc, where} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {setDoc, where, getDocs} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
  apiKey: 'AIzaSyAkKgPjKQwgDyuaiS_rPsa0mIN2T5teTuQ',
@@ -225,8 +244,11 @@ const firebaseConfig = {
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
-const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
-  
+let familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+const defaultGroupId = familyId;
+
+familyId = sessionStorage.getItem('activeGroupId')
+  || defaultGroupId;  
 $('profileToggle').onclick = async () => {
   const user = auth.currentUser;
   if (!user || !member) return;
@@ -763,7 +785,93 @@ $('menuLogout').onclick = () => {
   $('mainMenu').hidden = true;
   $('logout').click();
 };
+$('menuNewGroup').onclick = () => {
+  if (!auth.currentUser) return;
 
+  $('mainMenu').hidden = true;
+  $('profilePanel').hidden = true;
+  $('adminPanel').hidden = true;
+  $('groupsPanel').hidden = true;
+  $('newGroupPanel').hidden = false;
+};
+
+$('createGroup').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const name = $('newGroupName').value.trim();
+
+  if (!name || name.length > 40) {
+    $('groupStatus').textContent =
+      'Escribe un nombre válido.';
+    return;
+  }
+
+  $('createGroup').disabled = true;
+
+  try {
+    const ref = await addDoc(collection(db, 'Chats'), {
+      name: name,
+      adminUid: user.uid,
+      members: [user.uid],
+      createdAt: serverTimestamp()
+    });
+
+    sessionStorage.setItem('activeGroupId', ref.id);
+    location.reload();
+
+  } catch (error) {
+    $('groupStatus').textContent = error.message;
+  } finally {
+    $('createGroup').disabled = false;
+  }
+};
+$('menuChat').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  $('mainMenu').hidden = true;
+  $('profilePanel').hidden = true;
+  $('adminPanel').hidden = true;
+  $('newGroupPanel').hidden = true;
+  $('groupsPanel').hidden = false;
+
+  const lista = $('groupsList');
+  lista.textContent = 'Cargando grupos...';
+
+  try {
+    const q = query(
+      collection(db, 'Chats'),
+      where('members', 'array-contains', user.uid)
+    );
+
+    const snap = await getDocs(q);
+    lista.replaceChildren();
+
+    if (snap.empty) {
+      lista.textContent = 'No tienes grupos.';
+      return;
+    }
+
+    snap.forEach(d => {
+      const boton = document.createElement('button');
+
+      boton.textContent = '💬 ' + d.data().name;
+      boton.style.width = '100%';
+      boton.style.marginBottom = '8px';
+
+      boton.onclick = () => {
+        sessionStorage.setItem('activeGroupId', d.id);
+        location.reload();
+      };
+
+      lista.appendChild(boton);
+    });
+
+  } catch (error) {
+    lista.textContent = error.message;
+  }
+};
 </script>
 </body>
 </html>
