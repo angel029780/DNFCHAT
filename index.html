@@ -328,8 +328,15 @@ border-bottom:1px solid #333;">
 </section>
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  sendEmailVerification,
+  reload
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';import {getFirestore,doc,getDoc,collection,query,orderBy,limit,onSnapshot,addDoc,serverTimestamp,runTransaction,documentId} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 import {setDoc, where, getDocs} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
@@ -685,10 +692,66 @@ $('addMember').onclick = async () => {
 
 function errorText(e){const map={'auth/email-already-in-use':'Ese correo ya está registrado.','auth/invalid-email':'Correo electrónico no válido.','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/weak-password':'La contraseña es demasiado corta.','auth/operation-not-allowed':'Activa Email/Password en Firebase Authentication.','permission-denied':'No tienes permiso para acceder a este chat.'};return map[e.code]||e.message||'Ocurrió un error';}
 function credentials(){return {email:$('email').value.trim(),password:$('password').value};}
-$('register').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Creando cuenta...';try{await createUserWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
-$('login').onclick=async()=>{const {email,password}=credentials();$('authStatus').textContent='Iniciando sesión...';try{await signInWithEmailAndPassword(auth,email,password)}catch(e){$('authStatus').textContent=errorText(e)}};
+$('register').onclick = async () => {
+  const {email, password} = credentials();
+
+  $('authStatus').textContent =
+    'Creando cuenta...';
+
+  try {
+    const result =
+      await createUserWithEmailAndPassword(
+        auth, email, password
+      );
+
+    await sendEmailVerification(result.user);
+
+    await signOut(auth);
+
+    $('authStatus').textContent =
+      'Revisa tu correo electrónico y confirma tu cuenta antes de iniciar sesión.';
+
+  } catch (e) {
+    $('authStatus').textContent = errorText(e);
+  }
+};
+$('login').onclick = async () => {
+  const {email, password} = credentials();
+
+  $('authStatus').textContent =
+    'Iniciando sesión...';
+
+  try {
+    const result =
+      await signInWithEmailAndPassword(
+        auth, email, password
+      );
+
+   if (!result.user.emailVerified) {
+  try {
+    await sendEmailVerification(result.user);
+  } finally {
+    await signOut(auth);
+  }
+
+      $('authStatus').textContent =
+        'Debes verificar tu correo electrónico antes de entrar.';
+
+      return;
+    }
+
+  } catch (e) {
+    $('authStatus').textContent = errorText(e);
+  }
+};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
+  if (user && !user.emailVerified) {
+  $('auth').style.display = 'grid';
+  $('chatScreen').style.display = 'none';
+  $('homePanel').hidden = true;
+  return;
+}
   if (stopRequests) {
   stopRequests();
   stopRequests = null;
@@ -1167,7 +1230,7 @@ if (
 }
 
 onAuthStateChanged(auth, user => {
-  if (!user) return;
+  if (!user || !user.emailVerified) return;
 
   const codigo = sessionStorage.getItem(
     'pendingInvite'
@@ -1191,7 +1254,7 @@ $('homePanel').hidden = true;
   history.replaceState(null, '', url);
 });
   function abrirInicio() {
-  if (!auth.currentUser) return;
+  if (!auth.currentUser || !auth.currentUser.emailVerified) return;
 
   toolPanels.forEach(id => {
     $(id).hidden = true;
