@@ -347,7 +347,24 @@ border-bottom:1px solid #333;">
   ⚙️ Administración
 </button>
 <div id="adminPanel" class="panel" hidden>
-<h3>👨‍👩‍👧‍👦 Administrar Familia</h3>
+<h3>⚙️ Administración</h3>
+
+<label for="adminGroupSelect">
+  Seleccionar grupo
+</label>
+
+<select id="adminGroupSelect"
+  style="width:100%;padding:14px;
+  border-radius:10px;margin:12px 0;">
+  <option value="">
+    Selecciona un grupo
+  </option>
+</select>
+
+<button id="openAdminGroup" type="button">
+  Administrar grupo
+</button>
+<hr>
   <input id="newMemberUid" placeholder="UID del familiar" autocomplete="off">
   <button id="addMember" type="button">Agregar familiar</button>
   <p id="memberStatus" role="status"></p>
@@ -1022,6 +1039,12 @@ $('homeAdmin').hidden =
 if (snapshot.data().adminUid === user.uid) {
   mostrarSolicitudes();
   mostrarMiembros(members, nombres, snapshot.data().adminUid);
+if (sessionStorage.getItem('openAdminAfterReload') === user.uid) {
+  sessionStorage.removeItem('openAdminAfterReload');
+  $('homePanel').hidden = true;
+  $('mainMenu').hidden = true;
+  $('adminPanel').hidden = false;
+}
 }
 $('memberCount').textContent =
   'Miembros autorizados: ' + members.length;
@@ -1147,13 +1170,68 @@ $('menuProfile').onclick = () => {
   if (member) $('profileToggle').click();
 };
 
-$('menuAdmin').onclick = () => {
+$('menuAdmin').onclick = async () => {
+  const user = auth.currentUser;
+  if (!user || !user.emailVerified) return;
+
   $('mainMenu').hidden = true;
-  if (member && !$('adminToggle').hidden) {
-    $('adminToggle').click();
+  $('adminPanel').hidden = false;
+
+  const selector = $('adminGroupSelect');
+
+  selector.replaceChildren(
+    new Option('Selecciona un grupo', '')
+  );
+
+  try {
+    const grupos = await getDocs(query(
+      collection(db, 'Chats'),
+      where('members', 'array-contains', user.uid)
+    ));
+
+    if (auth.currentUser?.uid !== user.uid) return;
+
+    grupos.forEach(grupo => {
+      if (grupo.data().adminUid === user.uid) {
+        selector.add(
+          new Option(grupo.data().name, grupo.id)
+        );
+      }
+    });
+
+  } catch (error) {
+    $('manageStatus').textContent = errorText(error);
   }
 };
+$('openAdminGroup').onclick = async () => {
+  const user = auth.currentUser;
+  const id = $('adminGroupSelect').value;
 
+  if (!user || !user.emailVerified) return;
+
+  if (!id) {
+    alert('Selecciona un grupo primero.');
+    return;
+  }
+
+  try {
+    const snap = await getDoc(doc(db, 'Chats', id));
+
+    if (!snap.exists() ||
+        snap.data().adminUid !== user.uid ||
+        !snap.data().members.includes(user.uid)) {
+      alert('No eres administrador de este grupo.');
+      return;
+    }
+
+    sessionStorage.setItem('activeGroupId', id);
+   sessionStorage.setItem('openAdminAfterReload', user.uid);
+location.reload();
+
+  } catch (error) {
+    $('manageStatus').textContent = errorText(error);
+  }
+};
 $('menuRefresh').onclick = () => {
   location.reload();
 };
@@ -1450,6 +1528,10 @@ onAuthStateChanged(auth, user => {
   );
 
   if (!codigo) {
+  if (sessionStorage.getItem('openAdminAfterReload') === user.uid) {
+    return;
+  }
+
   abrirInicio();
   return;
 }
