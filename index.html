@@ -184,6 +184,9 @@ border-bottom:1px solid #333;">
   </button>
 
   <p id="inviteResult"></p>
+  <button id="shareInvite" type="button">
+  📤 Compartir invitación
+</button>
 </div>
 <div id="newGroupPanel" class="panel" hidden>
   <h3>➕ Crear grupo</h3>
@@ -1000,6 +1003,35 @@ $('menuInvite').onclick = () => {
 
   } catch (error) {
     status.textContent = error.message;
+  }
+};
+  $('shareInvite').onclick = async () => {
+  const code = $('inviteResult').textContent.trim();
+
+  if (!/^[a-f0-9-]{36}$/i.test(code)) {
+    alert('Primero genera un código de invitación.');
+    return;
+  }
+
+  const mensaje =
+    '¡Te invito a DNFCHAT!\n\n' +
+    'Código de invitación: ' + code +
+    '\n\nEntra en DNFCHAT y selecciona Unirse a un grupo.';
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Invitación DNFCHAT',
+        text: mensaje
+      });
+    } else {
+      await navigator.clipboard.writeText(mensaje);
+      alert('Invitación copiada.');
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      alert('No se pudo compartir la invitación.');
+    }
   }
 };
 </script>
