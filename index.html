@@ -64,10 +64,79 @@ footer input {
   min-width: 0;
   flex: 1;
 }
+body {
+  background: #000000;
+  color: #ffffff;
+}
+
+header, footer {
+  background: #000000;
+}
+
+.message {
+  background: #164E9E;
+}
+
+.message.mine {
+  background: #075E46;
+}
+
+button {
+  background: #159E88;
+  color: #ffffff;
+}
+
+footer input {
+  background: #202020;
+  color: #ffffff;
+}
+
+#mainMenu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #151515;
+  margin-bottom: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+#mainMenu[hidden],
+#mainMenu button[hidden] {
+  display: none !important;
+}
+
 </style>
 </head>
 <body>
-<header>💬 DNFCHAT</header>
+<header style="display:flex;align-items:center;gap:12px;">
+  <button id="menuToggle" type="button"
+    style="background:transparent;font-size:24px;padding:5px;"
+    aria-label="Abrir menú">
+    ☰
+  </button>
+
+  <span style="flex:1;text-align:center;">
+    💬 DNFCHAT
+  </span>
+</header>
+  <nav id="mainMenu" hidden
+style="background:#000000;
+padding:12px;
+border-bottom:1px solid #333;">
+
+  <button id="menuChat">💬 Chat Familia</button>
+
+  <button id="menuProfile">👤 Mi perfil</button>
+
+  <button id="menuAdmin" hidden>⚙️ Administración</button>
+
+  <button id="menuRefresh">🔄 Actualizar</button>
+
+  <button id="menuLogout">🚪 Cerrar sesión</button>
+
+</nav>
 <section id="auth" class="panel">
 <h2>Bienvenido a DNFCHAT</h2>
 <input id="email" type="email" placeholder="Correo electrónico" autocomplete="email">
@@ -649,6 +718,48 @@ document.addEventListener('touchend', e => {
 document.addEventListener('touchcancel', () => {
   refreshY = null;
 }); 
+$('menuToggle').onclick = () => {
+  const menu = $('mainMenu');
+
+  $('menuProfile').hidden =
+    !member || $('profileToggle').hidden;
+
+  $('menuAdmin').hidden =
+    !member || $('adminToggle').hidden;
+
+  $('menuLogout').hidden =
+    !auth.currentUser;
+
+  menu.hidden = !menu.hidden;
+};
+
+$('menuChat').onclick = () => {
+  $('mainMenu').hidden = true;
+  $('profilePanel').hidden = true;
+  $('adminPanel').hidden = true;
+};
+
+$('menuProfile').onclick = () => {
+  $('mainMenu').hidden = true;
+  if (member) $('profileToggle').click();
+};
+
+$('menuAdmin').onclick = () => {
+  $('mainMenu').hidden = true;
+  if (member && !$('adminToggle').hidden) {
+    $('adminToggle').click();
+  }
+};
+
+$('menuRefresh').onclick = () => {
+  location.reload();
+};
+
+$('menuLogout').onclick = () => {
+  $('mainMenu').hidden = true;
+  $('logout').click();
+};
+
 </script>
 </body>
 </html>
