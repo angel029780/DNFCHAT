@@ -184,6 +184,49 @@ border-bottom:1px solid #333;">
 <p id="authStatus" role="status"></p>
 </section>
 <section id="chatScreen">
+  <div id="homePanel" class="panel tool-screen" hidden>
+
+  <h1 style="text-align:center;">💬 DNFCHAT</h1>
+
+  <h2 style="text-align:center;">¡Bienvenido!</h2>
+
+  <p style="text-align:center;color:#aaa;">
+    ¿Qué deseas hacer hoy?
+  </p>
+
+  <div style="display:grid;gap:15px;margin-top:30px;">
+
+    <button id="homeGroups">
+      💬 Mis grupos
+    </button>
+
+    <button id="homeCreate">
+      ➕ Crear grupo
+    </button>
+
+    <button id="homeJoin">
+      🔑 Unirse a un grupo
+    </button>
+
+    <button id="homeInvite" hidden>
+      📩 Invitar miembros
+    </button>
+
+    <button id="homeProfile">
+      👤 Mi perfil
+    </button>
+
+    <button id="homeAdmin" hidden>
+      ⚙️ Administración
+    </button>
+
+    <button id="homeLogout">
+      🚪 Cerrar sesión
+    </button>
+
+  </div>
+
+</div>
   <div id="groupsPanel" class="panel" hidden>
   <h3>💬 Mis grupos</h3>
   <div id="groupsList"></div>
@@ -1083,16 +1126,12 @@ toolPanels.forEach(id => {
 
   back.type = 'button';
   back.className = 'tool-back';
-  back.textContent = '‹ Volver al chat';
+  back.textContent = '‹ Volver al inicio';
 
-  back.onclick = () => {
-    toolPanels.forEach(p => {
-      if ($(p)) $(p).hidden = true;
-    });
-
-    $('mainMenu').hidden = true;
-  };
-
+back.onclick = () => {
+  abrirInicio();
+};
+  
   panel.prepend(back);
 
   const observer = new MutationObserver(() => {
@@ -1134,7 +1173,12 @@ onAuthStateChanged(auth, user => {
     'pendingInvite'
   );
 
-  if (!codigo) return;
+  if (!codigo) {
+  abrirInicio();
+  return;
+}
+
+$('homePanel').hidden = true;
 
   $('inviteCode').value = codigo;
 
@@ -1146,6 +1190,46 @@ onAuthStateChanged(auth, user => {
   url.searchParams.delete('invite');
   history.replaceState(null, '', url);
 });
+  function abrirInicio() {
+  if (!auth.currentUser) return;
+
+  toolPanels.forEach(id => {
+    $(id).hidden = true;
+  });
+
+  $('mainMenu').hidden = true;
+
+  const esAdmin =
+    member && !$('adminToggle').hidden;
+
+  $('homeAdmin').hidden = !esAdmin;
+  $('homeInvite').hidden = !esAdmin;
+
+  $('homePanel').hidden = false;
+}
+
+const botonesInicio = {
+  homeGroups: 'menuChat',
+  homeCreate: 'menuNewGroup',
+  homeJoin: 'menuJoinGroup',
+  homeInvite: 'menuInvite',
+  homeProfile: 'menuProfile',
+  homeAdmin: 'menuAdmin'
+};
+
+Object.entries(botonesInicio).forEach(
+  ([inicio, menu]) => {
+    $(inicio).onclick = () => {
+      $('homePanel').hidden = true;
+      $(menu).click();
+    };
+  }
+);
+
+$('homeLogout').onclick = () => {
+  $('homePanel').hidden = true;
+  signOut(auth);
+};
 </script>
 </body>
 </html>
