@@ -1040,11 +1040,14 @@ $('menuInvite').onclick = () => {
   }
 
   const mensaje =
-    '¡Te invito a DNFCHAT!\n\n' +
-    'Código de invitación: ' + code +
-    '\n\nEntra en DNFCHAT y selecciona Unirse a un grupo.';
-
-  try {
+  '💬 ¡Te invito a DNFCHAT!\n\n' +
+  'Únete a nuestro grupo privado.\n\n' +
+  'Código de invitación: ' + code +
+  '\n\nAbre DNFCHAT aquí:\n' +
+  'https://angel029780.github.io/DNFCHAT/' +
+  '\n\nCrea tu cuenta o inicia sesión.' +
+  '\nSelecciona Unirse a un grupo e introduce el código.';
+    try {
     if (navigator.share) {
       await navigator.share({
         title: 'Invitación DNFCHAT',
