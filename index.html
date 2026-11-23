@@ -90,8 +90,12 @@ footer input {
   <input id="newMemberUid" placeholder="UID del familiar" autocomplete="off">
   <button id="addMember" type="button">Agregar familiar</button>
   <p id="memberStatus" role="status"></p>
-  <p id="memberCount"></p>
+  <p id="memberCount"></p> 
    <hr>
+<h3>👥 Administrar miembros</h3>
+<div id="membersList"></div>
+<p id="manageStatus" role="status"></p>
+<hr>
 <h3>📩 Solicitudes pendientes</h3>
 <div id="requestsList"></div>
 <p id="requestsStatus" role="status"></p>
@@ -119,6 +123,85 @@ const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 const $=id=>document.getElementById(id);
 let stopMessages=null,member=false;
 const familyId='NYLW64dACrpPLRO1ml8n'; // Debe coincidir exactamente con el ID del documento Chats en Firestore.
+function mostrarMiembros(members, nombres, adminUid) {
+  const lista = $('membersList');
+  lista.replaceChildren();
+
+  members.forEach(uid => {
+    const item = document.createElement('div');
+    item.className = 'message';
+
+    const nombre = document.createElement('p');
+    nombre.textContent = nombres[uid] || 'Familiar';
+
+    item.append(nombre);
+
+    if (uid === adminUid) {
+      const rol = document.createElement('p');
+      rol.textContent = '🛡️ Administrador';
+      item.append(rol);
+    } else {
+      const boton = document.createElement('button');
+      boton.textContent = 'Eliminar miembro';
+      boton.style.background = '#b93838';
+      boton.onclick = () => eliminarMiembro(uid);
+      item.append(boton);
+    }
+
+    lista.append(item);
+  });
+}
+  
+async function eliminarMiembro(uid) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  if (uid === user.uid) {
+    alert('No puedes eliminar al administrador.');
+    return;
+  }
+
+  if (!confirm('¿Deseas retirar el acceso a este familiar?')) {
+    return;
+  }
+
+  const status = $('manageStatus');
+
+  try {
+    const ref = doc(db, 'Chats', familyId);
+
+    await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+
+      if (!snap.exists()) {
+        throw new Error('Grupo no encontrado');
+      }
+
+      const data = snap.data();
+
+      if (data.adminUid !== user.uid) {
+        throw new Error('No autorizado');
+      }
+
+      if (uid === data.adminUid) {
+        throw new Error('Administrador protegido');
+      }
+
+      const members = data.members.filter(
+        id => id !== uid
+      );
+
+      tx.update(ref, { members });
+    });
+
+    alert('Miembro eliminado correctamente.');
+    location.reload();
+
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
 $('requestAccess').onclick = async () => {
   const user = auth.currentUser;
   if (!user || member) return;
@@ -367,8 +450,10 @@ if (auth.currentUser?.uid !== user.uid) return;
    
 $('adminPanel').hidden =
   snapshot.data().adminUid !== user.uid;
+
 if (snapshot.data().adminUid === user.uid) {
   mostrarSolicitudes();
+  mostrarMiembros(members, nombres, snapshot.data().adminUid);
 }
 $('memberCount').textContent =
   'Miembros autorizados: ' + members.length;
