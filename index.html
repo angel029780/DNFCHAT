@@ -612,7 +612,8 @@ $('requestsStatus').textContent = '';
   const chatRef=doc(db,'Chats',familyId),snapshot=await getDoc(chatRef);
   if(auth.currentUser?.uid!==user.uid)return;
   if(!snapshot.exists()){ $('status').textContent='No existe el chat Familia. Revisa su ID en Firestore.';return }
-  
+ $('chatTitle').textContent =
+  snapshot.data().name || 'Grupo'; 
 const members = snapshot.data().members;
 
 if (!Array.isArray(members) || !members.includes(user.uid)) {
