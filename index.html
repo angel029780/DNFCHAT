@@ -51,10 +51,30 @@ function show(p,id=null,push=true,fromMenu=false){if(needsAlias&&auth.currentUse
 function home(){stack=[];const u=auth.currentUser;show(u?.emailVerified?'groupsPage':u?'verifyPage':'loginPage',null,false);$('verifyEmail').textContent=u&&!u.emailVerified?u.email||'':''}$('home').onclick=home;$('back').onclick=()=>{if(!$('drawer').hidden){closeMenu();return}if(page==='privacyPage'&&!$('accountSettings').hidden){$('accountSettings').hidden=true;$('openDelete').hidden=false;$('deletePassword').value='';$('back').hidden=!stack.length;return}const x=stack.pop();if(x){show(x.p,x.id,false);if(x.drawer&&auth.currentUser?.emailVerified)openMenu();requestAnimationFrame(()=>{if(page===x.p&&active===x.id)$('main').scrollTop=x.scroll||0})}};
 function action(id,fn){$(id).onclick=async()=>{const b=$(id);b.disabled=true;try{await fn()}catch(e){notice(e.message)}finally{b.disabled=false}}}
 const creds=()=>[$('email').value.trim(),$('password').value];action('login',async()=>{await signInWithEmailAndPassword(auth,...creds());$('password').value=''});
-let resendUntil=0;
-async function sendVerification(u){if(!u||u.emailVerified)throw Error(tr('Inicia sesión nuevamente|Sign in again'));if(Date.now()<resendUntil)throw Error(tr('Espera antes de reenviar|Wait before resending'));await sendEmailVerification(u);resendUntil=Date.now()+60000;if(auth.currentUser===u)notice(tr('Revisa tu correo y la carpeta de spam|Check your inbox and spam folder'))}
-action('register',async()=>{const field=$('registerName');if(field.hidden){field.hidden=false;field.focus();notice(tr('Escribe tu nombre para crear la cuenta|Enter your name to create your account'));return}const name=field.value.trim();if(!name||name.length>40){field.focus();throw Error(tr('Escribe un nombre de 1 a 40 caracteres|Enter a name of 1 to 40 characters'))}busyAuth=true;try{const r=await createUserWithEmailAndPassword(auth,...creds());try{await updateProfile(r.user,{displayName:name})}catch(e){await signOut(auth);throw e}field.value='';field.hidden=true;$('password').value='';home();await sendVerification(r.user)}finally{busyAuth=false}});
-action('verifyResend',()=>sendVerification(auth.currentUser));action('verifyExit',()=>signOut(auth));action('verifyCheck',async()=>{const u=auth.currentUser;if(!u)return home();await u.reload();if(auth.currentUser!==u)return;if(!u.emailVerified){notice(tr('Tu correo todavía no está verificado. Abre el enlace recibido.|Your email is not verified yet. Open the link you received.'));return}await u.getIdToken(true);if(auth.currentUser!==u)return;await handleAuth(u)});
+let resendUntil=0, verificationBusy=false, resendBusy=false;
+async function checkVerification(manual=false){
+ const u=auth.currentUser;if(!u||busyAuth||verificationBusy)return false;
+ verificationBusy=true;
+ try{await u.reload();if(auth.currentUser!==u)return false;
+ if(!u.emailVerified){if(manual)notice(tr('Tu correo todavía no está verificado. Usa el enlace más reciente.|Your email is not verified yet. Use the latest link.'));return false;}
+ await u.getIdToken(true);if(auth.currentUser!==u)return false;
+ await handleAuth(u);return true;
+ }finally{verificationBusy=false;}
+}
+async function sendVerification(u){
+ if(!u||auth.currentUser!==u||resendBusy)return;
+ resendBusy=true;
+ try{await u.reload();if(auth.currentUser!==u)return;
+ if(u.emailVerified){await u.getIdToken(true);if(auth.currentUser===u)await handleAuth(u);return;}
+ if(Date.now()<resendUntil)throw Error(tr('Espera antes de reenviar|Wait before resending'));
+ await sendEmailVerification(u);resendUntil=Date.now()+60000;
+ if(auth.currentUser===u)notice(tr('Usa el enlace del correo más reciente. Revisa spam.|Use the latest email link. Check spam.'));
+ }finally{resendBusy=false;}
+}
+action('register',async()=>{const field=$('registerName');if(field.hidden){field.hidden=false;field.focus();notice(tr('Escribe tu nombre para crear la cuenta|Enter your name to create your account'));return}const name=field.value.trim();if(!name||name.length>40){field.focus();throw Error(tr('Escribe un nombre de 1 a 40 caracteres|Enter a name of 1 to 40 characters'))}busyAuth=true;try{const r=await createUserWithEmailAndPassword(auth,...creds());try{await updateProfile(r.user,{displayName:name})}catch(e){await signOut(auth);throw e}field.value='';field.hidden=true;$('password').value='';home();await sendVerification(r.user)}finally{busyAuth=false;await handleAuth(auth.currentUser)}});
+action('verifyResend',()=>sendVerification(auth.currentUser));action('verifyExit',()=>signOut(auth));action('verifyCheck',()=>checkVerification(true));
+function autoVerify(){if(!document.hidden&&page==='verifyPage'&&auth.currentUser)void checkVerification().catch(()=>{});}
+window.addEventListener('focus',autoVerify);window.addEventListener('pageshow',autoVerify);document.addEventListener('visibilitychange',autoVerify);setInterval(autoVerify,5000);
 action('reset',async()=>{await sendPasswordResetEmail(auth,creds()[0]);notice(tr('Revisa tu correo|Check your email'))});action('logout',()=>{closeMenu();return signOut(auth)});
 for(const [id,p] of Object.entries({groups:'groupsPage',create:'createPage',join:'joinPage',invite:'adminPickPage',admin:'adminPickPage',profile:'profilePage',settings:'settingsPage',loginSettings:'settingsPage'}))$(id).onclick=()=>{show(p,null,true,id!=='loginSettings')};
 $('language').onchange=()=>{lang=$('language').value;localStorage.setItem('dnf-language',lang);translate()};
@@ -180,7 +200,7 @@ let drawerAliasRun=0,drawerAliasOwner=null,drawerAliasText='';
 async function refreshDrawerUsername(u){const run=++drawerAliasRun;if(drawerAliasOwner!==u.uid){drawerAliasOwner=u.uid;drawerAliasText='';$('drawerUsername').textContent='';$('drawerUsernameRow').hidden=true;$('drawerUsernameCreate').hidden=true;$('drawerUsernameFeedback').textContent='';}try{const snap=await getDoc(aliasRef(u));if(run!==drawerAliasRun||auth.currentUser?.uid!==u.uid)return;const a=snap.data()?.alias;drawerAliasText=typeof a==='string'&&a?'@'+a:'';$('drawerUsername').textContent=drawerAliasText;$('drawerUsernameRow').hidden=!drawerAliasText;$('drawerUsernameCreate').hidden=!!drawerAliasText;}catch(e){if(run===drawerAliasRun&&auth.currentUser?.uid===u.uid){$('drawerUsernameRow').hidden=true;$('drawerUsernameCreate').hidden=true;drawerAliasText='';$('drawerUsernameFeedback').textContent=tr('No se pudo cargar el identificador|Could not load username');}}}
 $('drawerUsernameCopy').onclick=async()=>{if(!drawerAliasText||auth.currentUser?.uid!==drawerAliasOwner)return;try{await navigator.clipboard.writeText(drawerAliasText);$('drawerUsernameFeedback').textContent=tr('Identificador copiado|Username copied');}catch(e){$('drawerUsernameFeedback').textContent=tr('No se pudo copiar|Could not copy username');}};
 $('drawerUsernameCreate').onclick=()=>show('profilePage',null,true,true);
-onAuthStateChanged(auth,handleAuth);
+onAuthStateChanged(auth,async u=>{try{if(u&&!busyAuth){await u.reload();if(auth.currentUser!==u)return;if(u.emailVerified)await u.getIdToken(true);}await handleAuth(u);}catch(e){notice(e.message);if(auth.currentUser===u&&!u?.emailVerified)home();}});
 
 document.addEventListener('pointerdown',e=>{document.querySelectorAll('.reactionPicker:not([hidden])').forEach(p=>{if(!p.contains(e.target))p.hidden=true})});
 </script></body></html>
