@@ -1,0 +1,27 @@
+name: DNFCHAT account deletion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dnfchat-account-erasure
+  cancel-in-progress: false
+
+jobs:
+  erase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - run: pip install firebase-admin==6.9.0
+
+      - run: python scripts/erase_accounts.py
+        env:
+          DNF_ERASER_SERVICE_ACCOUNT: ${{ secrets.DNF_ERASER_SERVICE_ACCOUNT }}
