@@ -107,7 +107,13 @@ def erase_shared_activity(uid):
             item.reference.delete()
     for item in db.collection_group("MarketProducts").select(["owner"]).stream():
         if item.to_dict().get("owner") == uid and (item.reference.path.startswith("Chats/") or item.reference.parent.parent is None):
-            item.reference.delete()
+            if item.reference.parent.parent is None:
+                batch = db.batch()
+                batch.delete(db.collection("PublicMarketListings").document(item.id))
+                batch.delete(item.reference)
+                batch.commit()
+            else:
+                item.reference.delete()
     # Project only needed fields. Empty/missing parent documents also have collection-group descendants.
     for item in db.collection_group("Comments").stream():
         if item.to_dict().get("uid")==uid and item.reference.path.split("/")[0] in ("Feeds", "RemovedPosts"):
