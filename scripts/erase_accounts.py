@@ -75,6 +75,12 @@ def archive_posts(uid):
     delete_tree(db.document("Feeds/" + uid))
 
 def erase_shared_activity(uid):
+    for item in db.collection_group("FamilyPlan").select(["owner"]).stream():
+        if item.id == "feedback" and item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
+            item.reference.delete()
+    for item in db.collection_group("FamilyEventPhotos").select(["owner"]).stream():
+        if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
+            item.reference.delete()
     for item in db.collection_group("MarketProducts").select(["owner"]).stream():
         if item.to_dict().get("owner") == uid and (item.reference.path.startswith("Chats/") or item.reference.parent.parent is None):
             item.reference.delete()
