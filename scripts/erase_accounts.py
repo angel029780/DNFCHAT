@@ -76,7 +76,7 @@ def archive_posts(uid):
 
 def erase_shared_activity(uid):
     for item in db.collection_group("MarketProducts").select(["owner"]).stream():
-        if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
+        if item.to_dict().get("owner") == uid and (item.reference.path.startswith("Chats/") or item.reference.parent.parent is None):
             item.reference.delete()
     # Project only needed fields. Empty/missing parent documents also have collection-group descendants.
     for item in db.collection_group("Comments").stream():
