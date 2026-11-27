@@ -78,6 +78,12 @@ def erase_shared_activity(uid):
     for item in db.collection_group("FamilyPlan").select(["owner"]).stream():
         if item.id == "feedback" and item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
             item.reference.delete()
+    for item in db.collection_group("FamilyEvents").select(["owner"]).stream():
+        if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
+            item.reference.delete()
+    for item in db.collection_group("EventAttendance").select([]).stream():
+        if item.id == uid and item.reference.path.startswith("Chats/"):
+            item.reference.delete()
     for item in db.collection_group("FamilyEventPhotos").select(["owner"]).stream():
         if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
             item.reference.delete()
