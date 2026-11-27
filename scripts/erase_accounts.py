@@ -74,13 +74,31 @@ def archive_posts(uid):
         delete_tree(post)
     delete_tree(db.document("Feeds/" + uid))
 
+def preserve_shared_event(ref, uid):
+    # Only the ownership field changes. Other members' photos and RSVPs remain.
+    @firestore.transactional
+    def transfer(tx):
+        event = ref.get(transaction=tx).to_dict() or {}
+        if event.get("owner") != uid:
+            return
+        group = ref.parent.parent.get(transaction=tx).to_dict() or {}
+        successor = group.get("adminUid")
+        if successor and successor != uid and successor in group.get("members", []):
+            tx.update(ref, {"owner": successor})
+        elif not group.get("members"):
+            # Inactive group; the existing group erasure service will remove descendants.
+            tx.delete(ref)
+        else:
+            raise RuntimeError("Resolve active event group ownership before erasure")
+    transfer(db.transaction())
+
 def erase_shared_activity(uid):
     for item in db.collection_group("FamilyPlan").select(["owner"]).stream():
         if item.id == "feedback" and item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
             item.reference.delete()
     for item in db.collection_group("FamilyEvents").select(["owner"]).stream():
         if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
-            item.reference.delete()
+            preserve_shared_event(item.reference, uid)
     for item in db.collection_group("EventAttendance").select([]).stream():
         if item.id == uid and item.reference.path.startswith("Chats/"):
             item.reference.delete()
