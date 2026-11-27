@@ -75,6 +75,9 @@ def archive_posts(uid):
     delete_tree(db.document("Feeds/" + uid))
 
 def erase_shared_activity(uid):
+    for item in db.collection_group("MarketProducts").select(["owner"]).stream():
+        if item.to_dict().get("owner") == uid and item.reference.path.startswith("Chats/"):
+            item.reference.delete()
     # Project only needed fields. Empty/missing parent documents also have collection-group descendants.
     for item in db.collection_group("Comments").stream():
         if item.to_dict().get("uid")==uid and item.reference.path.split("/")[0] in ("Feeds", "RemovedPosts"):
@@ -96,6 +99,39 @@ def erase_shared_activity(uid):
         for item in db.collection_group(coll).select(["reporter"]).stream():
             if item.to_dict().get("reporter")==uid and item.reference.path.split("/")[0] == ("Chats" if coll=="Reports" else "FeedReports"):
                 item.reference.delete()
+
+def transfer_administered_groups(uid):
+    # Members are appended when their join request is approved.
+    for group in filtered(db.collection("Chats"), "members", "array_contains", uid).stream():
+        if group.to_dict().get("adminUid") != uid:
+            continue
+
+        @firestore.transactional
+        def transfer(tx):
+            data = group.reference.get(transaction=tx).to_dict() or {}
+            if data.get("adminUid") != uid:
+                return
+            config = db.document("AppConfig/moderation").get(transaction=tx).to_dict() or {}
+            for candidate in data.get("members", []):
+                if candidate == uid:
+                    continue
+                if db.document("AccountErasures/" + candidate).get(transaction=tx).exists:
+                    continue
+                try:
+                    account = auth.get_user(candidate)
+                except auth.UserNotFoundError:
+                    continue
+                if account.disabled or not account.email_verified or not account.email:
+                    continue
+                access = db.document("FamilyAccess/" + account.email.lower()).get(transaction=tx).to_dict() or {}
+                if candidate != config.get("adminUid") and (access.get("status") != "active" or access.get("uid") != candidate):
+                    continue
+                tx.update(group.reference, {"adminUid": candidate})
+                return
+            raise RuntimeError("No eligible successor; an administrator must resolve group ownership")
+
+        transfer(db.transaction())
+
 
 def erase(uid, email, requested_at):
     archive_posts(uid)
@@ -150,6 +186,8 @@ def process(job):
         raise RuntimeError("Transfer family administration before retrying")
     if account and not account.disabled:
         auth.update_user(uid, disabled=True)
+    if d.get("transferGroups") is True:
+        transfer_administered_groups(uid)
     erase(uid,email,d["requestedAt"])
     if account:
         auth.delete_user(uid)
@@ -185,7 +223,7 @@ def run():
             failed=True
     if failed:
         raise RuntimeError("Review permissions, quotas or group ownership and run again")
-    db.document("EraseService/status").set({"checkedAt":firestore.SERVER_TIMESTAMP, "groupDeletion":True})
+    db.document("EraseService/status").set({"checkedAt":firestore.SERVER_TIMESTAMP, "groupDeletion":True, "groupSuccession":True})
 
 if __name__=="__main__":
     run()
